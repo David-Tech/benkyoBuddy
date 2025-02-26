@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocabulary List</title>
+</head>
+<body>
+    <h1>Vocabulary Words</h1>
+    <table border="1">
+        <tr>
+            <th>Word</th>
+            <th>Meaning</th>
+        </tr>
+        {% for word in words %}
+        <tr>
+            <td>{{ word.word }}</td>
+            <td>{{ word.meaning }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <a href="{{ url_for('add_word') }}">Add New Word</a>
+</body>
+</html>
