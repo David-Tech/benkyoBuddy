@@ -1,5 +1,10 @@
 from flask import Flask, render_template, request, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
+import xml.etree.ElementTree as ET
+tree = ET.parse('JMdict_e.xml')
+root = tree.getroot()
+
+
 
 app = Flask(__name__)
 
@@ -9,6 +14,12 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+class dictionary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    word = db.Column(db.String(100), nullable=False)
+    meaning = db.Column(db.String(200), nullable=False)
+
+
 class Vocabulary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     word = db.Column(db.String(100), nullable=False)
@@ -16,7 +27,7 @@ class Vocabulary(db.Model):
 
 @app.route('/')
 def home():
-    words = Vocabulary.query.all() 
+
     return render_template('index.html', words=words)
 
 @app.route('/add', methods=['GET', 'POST'])
@@ -34,10 +45,11 @@ def add_word():
         return redirect(url_for('home'))
     return render_template('add_word.html')
 
-@app.route('/view')
+@app.route('/library')
 def view_words():
     words = Vocabulary.query.all()
-    return str([(word.word, word.meaning) for word in words])
+
+    return render_template('myLibrary.html')
 
 if __name__ == '__main__':
     with app.app_context():
