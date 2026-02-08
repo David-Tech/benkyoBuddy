@@ -167,6 +167,20 @@ cursor.executescript("""
 """
 )
 
+conn.execute("CREATE INDEX IF NOT EXISTS idx_k_ele_entry ON k_ele(entry_id);")
+conn.execute("CREATE INDEX IF NOT EXISTS idx_r_ele_entry ON r_ele(entry_id);")
+conn.execute("CREATE INDEX IF NOT EXISTS idx_sense_entry ON sense(entry_id);")
+conn.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS jisho_fts USING fts5(
+            entry_id UNINDEXED,
+            kanji,
+            reading,
+            definitions,
+            priorities,
+            tokenize='trigram'
+        );
+    """)
+
 # Commit and close connection
 conn.commit()
 conn.close()

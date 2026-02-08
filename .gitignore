@@ -62,5 +62,15 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Data files
+JMdict_e.xml
+instance/*.db
+instance/*.db-wal
+instance/*.db-shm
+instance/jisho.db
 
+
+# Python
+__pycache__/
+venv/
 __pycache__
