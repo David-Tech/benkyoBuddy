@@ -12,96 +12,70 @@ def is_jp(text):
 
 def search(query):
     conn = sqlite3.connect("./instance/jisho.db")
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    search = f"%{query}%"
-
-    if is_jp(query):
-         orderby_clause = """
-        ORDER BY
-            CASE
-                WHEN k.keb = ? THEN 0
-                WHEN r.reb = ? THEN 0
-                WHEN k.keb LIKE ? THEN 1
-                WHEN r.reb LIKE ? THEN 1
-                ELSE 2
-            END,
-
-            CASE 
-                WHEN k.ke_pri LIKE '%nf%' THEN 
-                    CAST(SUBSTR(k.ke_pri, INSTR(k.ke_pri, 'nf') + 2, 2) AS INTEGER)
-                
-                WHEN r.re_pri LIKE '%nf%' THEN 
-                    CAST(SUBSTR(r.re_pri, INSTR(r.re_pri, 'nf') + 2, 2) AS INTEGER)
-                ELSE 99
-            END,
-            
-            
-            
-            
-            """
-
-         param = (search, search, search,
-        query,
-        query,
-        search,
-        search) 
-    else:
-        orderby_clause = """        
-        ORDER BY
-            CASE
-                WHEN sg.gloss = ? THEN 0
-                WHEN sg.gloss LIKE ? THEN 1
-                ELSE 2
-            END,
-
-            CASE 
-                WHEN k.ke_pri LIKE '%nf%' THEN 
-                    CAST(SUBSTR(k.ke_pri, INSTR(k.ke_pri, 'nf') + 2, 2) AS INTEGER)
-                
-                WHEN r.re_pri LIKE '%nf%' THEN 
-                    CAST(SUBSTR(r.re_pri, INSTR(r.re_pri, 'nf') + 2, 2) AS INTEGER)
-                ELSE 99
-            
-            
-            """
-
-        param =( search, search, search, query, search)
-
-    sql= """
-                SELECT 
-                    k.keb AS kanji,
- GROUP_CONCAT(DISTINCT ki.ke_inf)  AS kanji_info,
-                    GROUP_CONCAT(DISTINCT kp.ke_pri)  AS kanji_priority,
-                    r.reb AS reading,
-                    GROUP_CONCAT(DISTINCT ri.re_inf) AS reading_info,
-                    GROUP_CONCAT(DISTINCT rp.re_pri) AS reading_priority,
-                    GROUP_CONCAT(DISTINCT sp.pos) AS part_of_speech,
-                    GROUP_CONCAT(DISTINCT sg.gloss)  AS definitions,
-                    GROUP_CONCAT(DISTINCT se.ex_text)  AS example_sentences
-                    FROM k_ele k
-                    JOIN entry e ON k.entry_id = e.id
-                    LEFT JOIN k_ele_info ki ON k.id = ki.k_ele_id
-                    LEFT JOIN k_ele_priority kp ON k.id = kp.k_ele_id
-                    LEFT JOIN r_ele r ON e.id = r.entry_id
-                    LEFT JOIN r_ele_info ri ON r.id = ri.r_ele_id
-                    LEFT JOIN r_ele_priority rp ON r.id = rp.r_ele_id
-                    LEFT JOIN sense s ON e.id = s.entry_id
-                    LEFT JOIN sense_pos sp ON s.id = sp.sense_id
-                    LEFT JOIN sense_gloss sg ON s.id = sg.sense_id
-                    LEFT JOIN sense_example se ON s.id = se.sense_id
-                    WHERE k.keb LIKE ? OR r.reb LIKE ? or sg.gloss LIKE ?
-                    GROUP BY e.id
-
+    
+    fts_sql = """
+        SELECT entry_id, 
+               (rank * 10) + (
+                   CASE 
+                       WHEN priorities LIKE '%nf%' THEN 
+                           CAST(SUBSTR(priorities, INSTR(priorities, 'nf') + 2, 2) AS INTEGER)
+                       ELSE 99 
+                   END
+               ) as hybrid_score
+        FROM jisho_fts 
+        WHERE jisho_fts MATCH ? 
+        ORDER BY hybrid_score ASC 
+        LIMIT 20
         """
+    
+    fts_param =f'"{query}"*'
+    fts_results = cursor.execute(fts_sql, (fts_param,)).fetchall()
+    entry_ids = [row['entry_id'] for row in fts_results]
 
-    sql += orderby_clause
-    sql += "\n LIMIT 7;"
-    print(sql)
+    if not entry_ids:
+        conn.close()
+        return[]
 
-    results = cursor.execute(sql,param).fetchall()
-    columns = [description[0] for description in cursor.description]
-    formattedResults = []
-    formattedResults= [dict(zip(columns, row)) for row in results]
+    placeholders = ', '.join(['?'] * len(entry_ids))
+
+    sql = f"""
+    SELECT 
+            k.keb AS kanji,
+            GROUP_CONCAT(DISTINCT ki.ke_inf) AS kanji_info,
+            GROUP_CONCAT(DISTINCT kp.ke_pri) AS kanji_priority,
+            r.reb AS reading,
+            GROUP_CONCAT(DISTINCT ri.re_inf) AS reading_info,
+            GROUP_CONCAT(DISTINCT rp.re_pri) AS reading_priority,
+            GROUP_CONCAT(DISTINCT sp.pos) AS part_of_speech,
+            GROUP_CONCAT(DISTINCT sg.gloss) AS definitions,
+            GROUP_CONCAT(DISTINCT se.ex_text) AS example_sentences
+        FROM entry e
+        LEFT JOIN k_ele k ON e.id = k.entry_id
+        LEFT JOIN k_ele_info ki ON k.id = ki.k_ele_id
+        LEFT JOIN k_ele_priority kp ON k.id = kp.k_ele_id
+        LEFT JOIN r_ele r ON e.id = r.entry_id
+        LEFT JOIN r_ele_info ri ON r.id = ri.r_ele_id
+        LEFT JOIN r_ele_priority rp ON r.id = rp.r_ele_id
+        LEFT JOIN sense s ON e.id = s.entry_id
+        LEFT JOIN sense_pos sp ON s.id = sp.sense_id
+        LEFT JOIN sense_gloss sg ON s.id = sg.sense_id
+        LEFT JOIN sense_example se ON s.id = se.sense_id
+        WHERE e.id IN ({placeholders})
+        GROUP BY e.id
+        ORDER BY CASE e.id
+    """
+
+    for i, entry_id in enumerate(entry_ids):
+        sql += f" WHEN {entry_id} THEN {i}"
+
+    sql += " END;"
+
+    results = cursor.execute(sql, entry_ids).fetchall()
+
+
+    formattedResults= [dict(row) for row in results]
     conn.close()
     return formattedResults
     
@@ -111,23 +85,29 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    query = request.args.get('search', '')
+    query = request.args.get('search', '').strip()
 
     if query: 
-        print(query)
         return redirect(url_for('results_page', query=query))
     return render_template('index.html')
 
 
 @app.route('/results')
 def results_page():
-    query = request.args.get('query', '')
+    query = request.args.get('query', '').strip()
     
+    if not query:
+        return redirect(url_for('home'))
+    
+
     results = search(query)
-    print(results)
-    print("First result:")
-    print(results[0])
-    return render_template('searchResults.html', results = results)
+
+    if results:
+        print(f"Found {len(results)} results. First: {results[0]['kanji'] or results[0]['reading']}")
+    else: print("NO results found.")
+
+
+    return render_template('searchResults.html', results = results, query=query)
 
 if __name__ == '__main__':
     app.run(debug=True)

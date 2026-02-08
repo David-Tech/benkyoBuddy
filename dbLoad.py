@@ -119,9 +119,26 @@ else:
                     cursor.execute("INSERT INTO sense_example_sent (example_id, ex_sent) VALUES (?, ?)", (example_id, ex_sent.text))
 
     # Commit and close
+    print("Building FTS")
+    cursor.execute("DELETE FROM jisho_fts;")
+    cursor.execute("""
+
+    INSERT INTO jisho_fts(entry_id, kanji, reading, definitions, priorities)
+        SELECT e.id,
+            (SELECT GROUP_CONCAT(keb, ' ') FROM k_ele WHERE entry_id = e.id),
+            (SELECT GROUP_CONCAT(reb, ' ') FROM r_ele WHERE entry_id = e.id),
+            (SELECT GROUP_CONCAT(gloss, ' ') FROM sense_gloss sg 
+                JOIN sense s ON sg.sense_id = s.id WHERE s.entry_id = e.id),
+            (SELECT GROUP_CONCAT(ke_pri, ' ') FROM k_ele_priority kp 
+                JOIN k_ele k ON kp.k_ele_id = k.id WHERE k.entry_id = e.id)
+        FROM entry e;
+                   
+    """)
+    
     conn.commit()
+    cursor.execute("VACUUM;")
     conn.close()
 
-    print("XML data successfully inserted into SQLite!")
+    print("XML data & FTS successfully inserted into SQLite!")
 
 

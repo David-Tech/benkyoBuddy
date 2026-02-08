@@ -67,7 +67,7 @@ JMdict_e.xml
 instance/*.db
 instance/*.db-wal
 instance/*.db-shm
-instance/jisho.db
+
 
 
 # Python

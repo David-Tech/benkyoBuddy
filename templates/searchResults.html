@@ -3,31 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Benkyo Buddy</title>
+    <title>Results for "{{ query }}" - Benkyo Buddy</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 20px; background: #fdfdfd; }
+        .search-header { border-bottom: 2px solid #3498db; padding-bottom: 20px; margin-bottom: 30px; }
+        .entry { background: white; border: 1px solid #e1e8ed; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        
+        /* The "Pro" Japanese Look */
+        .headword { display: flex; align-items: baseline; gap: 15px; margin-bottom: 10px; }
+        .kanji { font-size: 2.2rem; font-weight: bold; color: #2c3e50; }
+        .reading { font-size: 1.2rem; color: #7f8c8d; }
+        
+        .definition-list { margin: 10px 0; padding-left: 20px; }
+        .definition-item { margin-bottom: 5px; color: #34495e; }
+        
+        .pos-tag { font-style: italic; color: #9b59b6; font-size: 0.9rem; margin-right: 10px; }
+        .example-box { background: #f0f7fb; border-left: 4px solid #3498db; padding: 10px; margin-top: 15px; font-size: 0.95rem; }
+    </style>
 </head>
 <body>
     <h1>Jisho! 日本語の辞書</h1>
 
-    <form class="search-container" method = "GET" action="/">
-        <input type="text" id="search" name="search" placeholder="Search...">
-        <button type = "submit"> </button>
-        
-    </form>
-
-    <h1>Results</h1>
-    <div>
-        <table>
-            <tr>
-                
-            </tr>
-
-
-
-
-
-        </table>
-
+    <div class="search-header">
+        <a href="/" style="text-decoration: none;">← Back</a>
+        <h1>Results for: {{ query }}</h1>
     </div>
+
+    {% if results %}
+        {% for res in results %}
+            <div class="entry">
+                <div class="headword">
+                    <span class="kanji">{{ res.kanji if res.kanji else res.reading }}</span>
+                    
+                    {% if res.kanji %}
+                        <span class="reading">【{{ res.reading }}】</span>
+                    {% endif %}
+                </div>
+
+                {% if res.part_of_speech %}
+                    <div class="pos-tags">
+                        {% for pos in res.part_of_speech.split(',') %}
+                            <span class="pos-tag">{{ pos }}</span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <ol class="definition-list">
+                    {% for gloss in res.definitions.split(',') %}
+                        <li class="definition-item">{{ gloss }}</li>
+                    {% endfor %}
+                </ol>
+
+                {% if res.example_sentences %}
+                    <div class="example-box">
+                        <strong>Example:</strong>
+                        <p>{{ res.example_sentences.split(',')[0] }}</p> 
+                        </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="no-results">
+            <p>No results found for <strong>{{ query }}</strong>. Try checking your spelling or using different keywords.</p>
+        </div>
+    {% endif %}
 
 </body>
 
