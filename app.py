@@ -14,24 +14,42 @@ def search(query):
     conn = sqlite3.connect("./instance/jisho.db")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    
-    fts_sql = """
-        SELECT entry_id, 
-               (rank * 10) + (
-                   CASE 
-                       WHEN priorities LIKE '%nf%' THEN 
-                           CAST(SUBSTR(priorities, INSTR(priorities, 'nf') + 2, 2) AS INTEGER)
-                       ELSE 99 
-                   END
-               ) as hybrid_score
-        FROM jisho_fts 
-        WHERE jisho_fts MATCH ? 
-        ORDER BY hybrid_score ASC 
-        LIMIT 20
-        """
-    
-    fts_param =f'"{query}"*'
-    fts_results = cursor.execute(fts_sql, (fts_param,)).fetchall()
+    if is_jp(query):
+        fts_sql = """
+            SELECT entry_id, 
+                (rank * 100) + (CASE WHEN reading = :q OR kanji = :q THEN 0 ELSE :penalty END) +    
+                    (CASE 
+                        WHEN priorities LIKE '%nf%' THEN 
+                            CAST(SUBSTR(priorities, INSTR(priorities, 'nf') + 2, 2) AS INTEGER)
+                        ELSE :penalty 
+                    END
+                ) as hybrid_score
+            FROM jisho_fts 
+            WHERE jisho_fts MATCH :match_param 
+            ORDER BY hybrid_score ASC 
+            LIMIT 20
+            """
+        fts_params = {"q" : query, "match_param" : f'"{query}"*', "penalty" : 1000}
+
+
+    else:
+        fts_sql = """
+            SELECT entry_id, 
+                (rank * 100) + (CASE WHEN definitions  LIKE :q_start THEN 0 ELSE :penalty END) +    
+                    (CASE 
+                        WHEN priorities LIKE '%nf%' THEN 
+                            CAST(SUBSTR(priorities, INSTR(priorities, 'nf') + 2, 2) AS INTEGER)
+                        ELSE :penalty
+                    END
+                ) as hybrid_score
+            FROM jisho_fts 
+            WHERE jisho_fts MATCH :match_param 
+            ORDER BY hybrid_score ASC 
+            LIMIT 20
+            """
+        fts_params = {"exact_q" : f"% {query} %", "q_start" :f"{query} %" , "match_param" : f'"{query}"', "penalty" : 5000}
+
+    fts_results = cursor.execute(fts_sql, fts_params).fetchall()
     entry_ids = [row['entry_id'] for row in fts_results]
 
     if not entry_ids:
@@ -45,7 +63,7 @@ def search(query):
             k.keb AS kanji,
             GROUP_CONCAT(DISTINCT ki.ke_inf) AS kanji_info,
             GROUP_CONCAT(DISTINCT kp.ke_pri) AS kanji_priority,
-            r.reb AS reading,
+            GROUP_CONCAT(DISTINCT r.reb) AS reading,
             GROUP_CONCAT(DISTINCT ri.re_inf) AS reading_info,
             GROUP_CONCAT(DISTINCT rp.re_pri) AS reading_priority,
             GROUP_CONCAT(DISTINCT sp.pos) AS part_of_speech,
